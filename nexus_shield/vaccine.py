@@ -21,7 +21,7 @@ def evaluate(v, malicious, benign):
     tp = sum(matches(v, e) for e in malicious); fp = sum(matches(v, e) for e in benign)
     r = tp / len(malicious) if malicious else 0.0
     return {"recall": round(r, 2), "false_positives": fp, "benign_tested": len(benign),
-            "safe_to_deploy": fp == 0 and r >= 0.8}
+            "safe_to_deploy": bool(benign) and fp == 0 and r >= 0.8}
 
 def validate(events, benign, min_train=2):
     """Train on ~60% of sessions, test on the rest (never seen in training); ship a vaccine trained on all."""

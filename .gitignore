@@ -1,3 +1,10 @@
 __pycache__/
 *.pyc
+*.egg-info/
+build/
+dist/
+.pytest_cache/
 events.jsonl
+collected.db
+*.cu8
+sdr_obs.jsonl

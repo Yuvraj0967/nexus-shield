@@ -14,8 +14,11 @@ class Obs:
     cfo_hz: float
     emitter_id: str = ""
 
-def read_iq(path):
+def read_iq(path, fmt="cf32"):
+    """fmt: 'cf32' (GNU Radio file sink) or 'cu8' (rtl_sdr default, unsigned 8-bit I/Q)."""
     raw = open(path, "rb").read()
+    if fmt == "cu8":
+        return [complex((raw[i] - 127.5) / 127.5, (raw[i + 1] - 127.5) / 127.5) for i in range(0, len(raw) - 1, 2)]
     f = struct.unpack("<%df" % (len(raw) // 4), raw[: len(raw) // 4 * 4])
     return [complex(f[i], f[i + 1]) for i in range(0, len(f) - 1, 2)]
 
@@ -30,8 +33,8 @@ def estimate(samples, fs):
     p = sum(abs(s) ** 2 for s in samples) / len(samples)
     return cfo, 10 * math.log10(p) if p > 0 else -120.0
 
-def from_capture(path, ts, fs=250_000, center_hz=433.92e6):
-    cfo, p = estimate(read_iq(path), fs)
+def from_capture(path, ts, fs=250_000, center_hz=433.92e6, fmt="cf32"):
+    cfo, p = estimate(read_iq(path, fmt), fs)
     return Obs(ts, center_hz, p, cfo)
 
 def synth_iq(cfo, fs=250_000, n=2048, snr_db=20, amp=0.5, seed=0):
@@ -68,6 +71,9 @@ def actors(events, corr):
         a["ips"].add(events[i].ip); a["nodes"].add(events[i].node); a["sessions"] += 1; a["cfo_hz"].append(o.cfo_hz)
     for a in out.values(): a["cfo_hz"] = round(sum(a["cfo_hz"]) / len(a["cfo_hz"]), 1)
     return out
+
+def save(path, o):
+    with open(path, "a") as f: f.write(json.dumps(o.__dict__) + "\n")
 
 def load(path):
     return [Obs(**json.loads(l)) for l in open(path) if l.strip()]

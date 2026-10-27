@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nexus-shield"
+dynamic = ["version"]
+description = "Distributed honeypot prototype: telemetry, SDR attribution, behavioral clustering, passive vaccines"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+nexus-shield = "nexus_shield.cli:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "nexus_shield.__version__" }
+
+[tool.setuptools]
+packages = ["nexus_shield"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
