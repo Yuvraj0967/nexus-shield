@@ -1,22 +1,33 @@
-"""Vaccines are PASSIVE: detection rules + blocklist suggestions, validated offline against a benign corpus.
-Nothing here connects out or touches the attacker."""
-import re
-from .analysis import signature
+"""Vaccines are PASSIVE: detection rules + blocklist suggestions. They are trained on observed sessions, stripped of
+anything seen in benign traffic, and validated on held-out sessions before being marked safe to deploy.
+Nothing here connects out or acts on the remote host."""
+import hashlib
+from collections import Counter
+from .analysis import tokens
 
-def make(events, min_support=2):
-    """Tokens seen across >= min_support sessions form a rule."""
-    from collections import Counter
-    c = Counter(t for e in events for t in set(signature(e)["tokens"]))
-    toks = sorted(t for t, n in c.items() if n >= min_support)
-    return {"tokens": toks, "min_hits": max(1, min(2, len(toks))), "block_srcs": sorted({e.src.split(":")[0] for e in events})}
+def make(events, benign=(), min_support=0.6):
+    n = len(events)
+    c = Counter(t for e in events for t in tokens(e))
+    ben = {t for e in benign for t in tokens(e)}
+    toks = sorted(t for t, k in c.items() if k / n >= min_support and t not in ben)
+    return {"id": hashlib.sha256(" ".join(toks).encode()).hexdigest()[:10], "tokens": toks,
+            "min_hits": min(len(toks), max(2, -(-len(toks) // 3))) if toks else 1,
+            "block_srcs": sorted({e.ip for e in events})}
 
-def matches(vaccine, ev):
-    if not vaccine["tokens"]: return False
-    text = " ".join(ev.payloads).lower()
-    return sum(1 for t in vaccine["tokens"] if re.search(re.escape(t), text)) >= vaccine["min_hits"]
+def matches(v, ev):
+    return bool(v["tokens"]) and len(set(v["tokens"]) & tokens(ev)) >= v["min_hits"]
 
-def evaluate(vaccine, malicious, benign):
-    tp = sum(matches(vaccine, e) for e in malicious)
-    fp = sum(matches(vaccine, e) for e in benign)
-    return {"recall": tp / len(malicious) if malicious else 0.0,
-            "false_positives": fp, "benign": len(benign), "safe_to_deploy": fp == 0 and tp > 0}
+def evaluate(v, malicious, benign):
+    tp = sum(matches(v, e) for e in malicious); fp = sum(matches(v, e) for e in benign)
+    r = tp / len(malicious) if malicious else 0.0
+    return {"recall": round(r, 2), "false_positives": fp, "benign_tested": len(benign),
+            "safe_to_deploy": fp == 0 and r >= 0.8}
+
+def validate(events, benign, min_train=2):
+    """Train on ~60% of sessions, test on the rest (never seen in training); ship a vaccine trained on all."""
+    k = max(min_train, round(len(events) * 0.6))
+    if len(events) - k < 1:
+        return make(events, benign), {"safe_to_deploy": False, "reason": "not enough sessions to hold out"}
+    held = evaluate(make(events[:k], benign), events[k:], benign)
+    held["heldout_sessions"] = len(events) - k
+    return make(events, benign), held
