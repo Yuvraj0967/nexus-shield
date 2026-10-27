@@ -1,4 +1,4 @@
-# Isolated lab: one collector, two honeypot nodes on a private network. Set NEXUS_TOKEN first.
+# Isolated lab: one collector, two honeypot nodes. Copy .env.example to .env and fill in the secrets first.
 # Honeypot ports are published on 127.0.0.1 only; change deliberately if you expose them.
 x-hardening: &hardening
   read_only: true
@@ -12,27 +12,31 @@ services:
     <<: *hardening
     build: .
     command: ["collector", "--host", "0.0.0.0", "--port", "8080", "--db", "/data/collected.db"]
-    environment: [NEXUS_TOKEN]
+    environment:
+      NEXUS_TOKEN: ${ADMIN_TOKEN:?set ADMIN_TOKEN in .env}
+      NEXUS_NODE_TOKENS: '{"node-1": "${NODE1_TOKEN:?}", "node-2": "${NODE2_TOKEN:?}"}'
     volumes: ["collector-data:/data"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u,os;u.urlopen(u.Request('http://127.0.0.1:8080/healthz',headers={'X-Token':os.environ['NEXUS_TOKEN']}))"]
+      interval: 10s
     networks: [lab]
   node1:
     <<: *hardening
     build: .
     command: ["run", "--host", "0.0.0.0", "--port", "2323", "--node", "node-1", "--log", "/tmp/events.jsonl", "--collector", "http://collector:8080"]
-    environment: [NEXUS_TOKEN]
+    environment: { NEXUS_TOKEN: "${NODE1_TOKEN:?}" }
     ports: ["127.0.0.1:2323:2323"]
-    depends_on: [collector]
+    depends_on: { collector: { condition: service_healthy } }
     networks: [lab]
   node2:
     <<: *hardening
     build: .
     command: ["run", "--host", "0.0.0.0", "--port", "2323", "--node", "node-2", "--log", "/tmp/events.jsonl", "--collector", "http://collector:8080"]
-    environment: [NEXUS_TOKEN]
+    environment: { NEXUS_TOKEN: "${NODE2_TOKEN:?}" }
     ports: ["127.0.0.1:2324:2323"]
-    depends_on: [collector]
+    depends_on: { collector: { condition: service_healthy } }
     networks: [lab]
 volumes:
   collector-data:
 networks:
   lab:
-    internal: false

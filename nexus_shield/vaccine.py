@@ -1,29 +1,51 @@
-"""Vaccines are PASSIVE: detection rules + blocklist suggestions. They are trained on observed sessions, stripped of
-anything seen in benign traffic, and validated on held-out sessions before being marked safe to deploy.
-Nothing here connects out or acts on the remote host."""
+"""Vaccines are PASSIVE: detection rules + blocklist suggestions.
+
+Trained on observed sessions, stripped of anything seen in benign traffic, and validated on held-out sessions
+before being marked safe to deploy. Nothing here connects out or acts on the remote host."""
+
+from __future__ import annotations
+
 import hashlib
 from collections import Counter
-from .analysis import tokens
+from collections.abc import Sequence
+from typing import Any
 
-def make(events, benign=(), min_support=0.6):
+from .analysis import tokens
+from .telemetry import Event
+
+Vaccine = dict[str, Any]
+
+
+def make(events: Sequence[Event], benign: Sequence[Event] = (), min_support: float = 0.6) -> Vaccine:
     n = len(events)
     c = Counter(t for e in events for t in tokens(e))
     ben = {t for e in benign for t in tokens(e)}
     toks = sorted(t for t, k in c.items() if k / n >= min_support and t not in ben)
-    return {"id": hashlib.sha256(" ".join(toks).encode()).hexdigest()[:10], "tokens": toks,
-            "min_hits": min(len(toks), max(2, -(-len(toks) // 3))) if toks else 1,
-            "block_srcs": sorted({e.ip for e in events})}
+    return {
+        "id": hashlib.sha256(" ".join(toks).encode()).hexdigest()[:10],
+        "tokens": toks,
+        "min_hits": min(len(toks), max(2, -(-len(toks) // 3))) if toks else 1,
+        "block_srcs": sorted({e.ip for e in events}),
+    }
 
-def matches(v, ev):
+
+def matches(v: Vaccine, ev: Event) -> bool:
     return bool(v["tokens"]) and len(set(v["tokens"]) & tokens(ev)) >= v["min_hits"]
 
-def evaluate(v, malicious, benign):
-    tp = sum(matches(v, e) for e in malicious); fp = sum(matches(v, e) for e in benign)
-    r = tp / len(malicious) if malicious else 0.0
-    return {"recall": round(r, 2), "false_positives": fp, "benign_tested": len(benign),
-            "safe_to_deploy": bool(benign) and fp == 0 and r >= 0.8}
 
-def validate(events, benign, min_train=2):
+def evaluate(v: Vaccine, malicious: Sequence[Event], benign: Sequence[Event]) -> dict[str, Any]:
+    tp = sum(matches(v, e) for e in malicious)
+    fp = sum(matches(v, e) for e in benign)
+    r = tp / len(malicious) if malicious else 0.0
+    return {
+        "recall": round(r, 2),
+        "false_positives": fp,
+        "benign_tested": len(benign),
+        "safe_to_deploy": bool(benign) and fp == 0 and r >= 0.8,
+    }
+
+
+def validate(events: Sequence[Event], benign: Sequence[Event], min_train: int = 2) -> tuple[Vaccine, dict[str, Any]]:
     """Train on ~60% of sessions, test on the rest (never seen in training); ship a vaccine trained on all."""
     k = max(min_train, round(len(events) * 0.6))
     if len(events) - k < 1:

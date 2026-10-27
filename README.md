@@ -1,6 +1,6 @@
 # Nexus Shield
 
-Status: v0.2 working project (stdlib-only Python 3.10+). Runs end to end on loopback with simulated attackers and
+Status: v0.3 developer-grade prototype (stdlib-only Python 3.11+). Runs end to end on loopback with simulated attackers and
 synthetic radio captures. Not a production security product.
 
 Distributed honeypot nodes feed a central collector. An SDR layer attributes sessions to physical emitters, an
@@ -25,19 +25,25 @@ attackers ──► honeypot nodes ──POST /events──► collector ──�
 
 ## Install & run
 ```
-pip install -e ".[dev]"            # Python 3.10+, no runtime dependencies
-pytest -q                          # 15 tests, including a live end-to-end run
+make install                       # pip install -e ".[dev]"  (runtime has zero dependencies)
+make check                         # ruff, mypy --strict, pytest + 85% coverage gate, demo, bench
 nexus-shield demo                  # collector + 2 nodes + attackers on loopback
+nexus-shield bench                 # seeded evaluation (see docs/BENCHMARKS.md)
 
-export NEXUS_TOKEN=secret
-nexus-shield collector --port 8080 --db collected.db            # add --certfile/--keyfile for TLS
+export NEXUS_TOKEN=secret          # or --config nexus.toml (see nexus.example.toml)
+nexus-shield collector --port 8080 --db collected.db            # --certfile/--keyfile for TLS; /metrics for Prometheus
 nexus-shield run --port 2323 --node node-1 --collector http://127.0.0.1:8080
+nexus-shield replay events.jsonl --collector http://127.0.0.1:8080   # resend after a collector outage
 nexus-shield capture --every 5                                  # rtl_sdr -> sdr_obs.jsonl (needs hardware)
 nexus-shield report collected.db --obs sdr_obs.jsonl --format html --out report.html
 nexus-shield publish collected.db --benign benign.jsonl --collector http://127.0.0.1:8080
-docker compose up --build          # hardened two-node lab
+cp .env.example .env && docker compose up --build               # hardened two-node lab, per-node tokens
 ```
-Docs: [architecture](docs/ARCHITECTURE.md) · [threat model](docs/THREAT_MODEL.md) · [schemas/API](docs/SCHEMAS.md) · [SDR](docs/SDR.md) · [deployment](docs/DEPLOYMENT.md)
+Docs: [architecture](docs/ARCHITECTURE.md) · [threat model](docs/THREAT_MODEL.md) · [schemas/API](docs/SCHEMAS.md) · [SDR](docs/SDR.md) · [benchmarks](docs/BENCHMARKS.md) · [deployment](docs/DEPLOYMENT.md) · [ADRs](docs/adr/) · [contributing](CONTRIBUTING.md)
+
+## Engineering
+36 tests (~98% coverage) including a live end-to-end run, TLS, fuzzing of both network inputs and an offline-recovery test;
+`mypy --strict` and ruff clean; CI on Python 3.11-3.13 plus a Docker build; per-node credentials, rate limiting, and metrics on the collector.
 
 ## Demo output (abridged)
 ```
@@ -51,6 +57,7 @@ Docs: [architecture](docs/ARCHITECTURE.md) · [threat model](docs/THREAT_MODEL.m
 - **SDR:** the demo uses synthetic IQ. Real captures need your own receiver (e.g. `rtl_sdr` writing cf32); there is no device driver, and real CFO drifts with temperature and distance, so tolerances need tuning. Timestamp linking assumes well-synchronized clocks and that the emitter is physically within radio range of a receiver.
 - **Detection is lexical:** token-based; an attacker who avoids known vocabulary evades it. No ML, no protocol-level emulation beyond a fake prompt.
 - **Vaccines never act on remote hosts.** They tag/alert; blocking is a human or firewall decision. Held-out sets in the demo are tiny; real use needs far more data.
-- Single collector, shared-token auth only (no per-node identity or rate limiting).
+- Single collector; per-node tokens and rate limits exist, but no replay protection, token rotation, or mTLS.
+- Benchmarks are synthetic (see docs/BENCHMARKS.md): attribution is unreliable below ~10 dB SNR and the detection corpus favors the token approach.
 - Docker/`rtl_sdr` paths are provided but not exercised in CI.
 - Use only in authorized, isolated environments.

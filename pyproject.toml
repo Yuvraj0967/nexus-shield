@@ -7,12 +7,13 @@ name = "nexus-shield"
 dynamic = ["version"]
 description = "Distributed honeypot prototype: telemetry, SDR attribution, behavioral clustering, passive vaccines"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = { text = "MIT" }
 dependencies = []
+classifiers = ["Programming Language :: Python :: 3", "Topic :: Security", "Typing :: Typed"]
 
 [project.optional-dependencies]
-dev = ["pytest"]
+dev = ["pytest", "pytest-cov", "ruff", "mypy"]
 
 [project.scripts]
 nexus-shield = "nexus_shield.cli:main"
@@ -23,5 +24,29 @@ version = { attr = "nexus_shield.__version__" }
 [tool.setuptools]
 packages = ["nexus_shield"]
 
+[tool.setuptools.package-data]
+nexus_shield = ["py.typed"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["nexus_shield"]
+omit = ["nexus_shield/__main__.py"]
+
+[tool.coverage.report]
+fail_under = 85
+show_missing = true
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "A"]
+ignore = ["UP031", "B905"]  # %-format and non-strict zip are used deliberately
+
+[tool.mypy]
+strict = true
+python_version = "3.11"
+files = ["nexus_shield"]

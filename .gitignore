@@ -8,3 +8,4 @@ events.jsonl
 collected.db
 *.cu8
 sdr_obs.jsonl
+.env

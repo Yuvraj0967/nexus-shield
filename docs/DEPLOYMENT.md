@@ -1,5 +1,9 @@
 # Deployment
-**Local lab (Docker):** `export NEXUS_TOKEN=$(openssl rand -hex 16); docker compose up --build`. Nodes listen on 127.0.0.1:2323/2324.
+**Local lab (Docker):** `cp .env.example .env`, fill the three tokens (`openssl rand -hex 16`), then `docker compose up --build`. Nodes listen on 127.0.0.1:2323/2324.
+
+**Config file:** `nexus-shield --config nexus.toml collector` (see `nexus.example.toml`); flags override it. Keep secrets in the environment: `NEXUS_TOKEN`, `NEXUS_NODE_TOKENS` (JSON).
+
+**Operations:** scrape `/metrics` with the admin token; if a node cannot reach the collector it keeps sessions in its local log, resend with `nexus-shield replay events.jsonl --collector URL`.
 
 **Bare metal:**
 ```

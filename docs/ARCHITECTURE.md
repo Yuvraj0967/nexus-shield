@@ -15,3 +15,5 @@ that pass. Nodes fetch the vaccine set at the end of each session and add a `vac
 
 **Design choices:** stdlib only; node never executes input; vaccines are data, not code; the collector is the only
 shared state; every stage is usable offline from JSONL/SQLite files.
+
+**Trust boundaries:** attacker↔node (hostile input, capped and non-executing); node↔collector (per-node token, optional TLS); analyst↔collector (admin token). See `docs/THREAT_MODEL.md` and `docs/adr/`.

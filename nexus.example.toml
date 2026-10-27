@@ -1,0 +1,15 @@
+# Use with: nexus-shield --config nexus.toml <command>   (flags override this file)
+# Keep secrets out of files you commit: prefer NEXUS_TOKEN in the environment.
+[collector]
+host = "127.0.0.1"
+port = 8080
+db = "collected.db"
+rate = 50.0
+burst = 100.0
+# node_tokens = { "node-1" = "change-me-1", "node-2" = "change-me-2" }   # per-node credentials
+
+[run]
+node = "node-1"
+port = 2323
+collector = "http://127.0.0.1:8080"
+max_conn = 64
