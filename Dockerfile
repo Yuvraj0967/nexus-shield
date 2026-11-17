@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.15-slim
 RUN useradd -r -u 10001 nexus
 WORKDIR /app
 COPY pyproject.toml README.md ./
